@@ -53,11 +53,16 @@ def index_page():
     pythoncom.CoInitialize()
     apps = find_open_apps()
 
+    with open("appsInPath.txt", "r") as file:
+        appsInPath = file.read().split("\n")
+        appsInPath = [app for app in appsInPath if app != ""]
+        print(appsInPath)
+
     with open("sliders.json", "r") as file:
         preLoadedApps = json.load(file)
 
         # print(preLoadedApps)
-    return render_template('index.html', apps=apps, preLoadedApps=preLoadedApps)  # Loads the index.html file
+    return render_template('index.html', apps=apps, preLoadedApps=preLoadedApps, appsInPath=appsInPath)  # Loads the index.html file
 
 @app.route('/submit', methods=['POST']) 
 def submit():
@@ -132,7 +137,30 @@ def calibrate():
 
     return redirect(url_for('index_page'))
 
+
+@app.route('/path_select', methods=['POST'])
+def path_select():
+    path = request.get_json()['path']
+    print(path)
+
+    # find all exe files in the directory
+    apps = []
+    for root, dirs, files in os.walk(path):
+        for file in files:
+            if file.endswith('.exe'):
+                apps.append(file)
+
+    with open("appsInPath.txt", "w") as f:
+        for app in apps:
+            f.write(app + "\n")
+
+    return redirect(url_for('index_page'))
+
+
+
+
 if __name__ == '__main__':
     # Runs the app in FlaskUI which just opens up a 
     # web browser and runs the app
-    FlaskUI(app=app, server="flask").run()
+    app.run(host="0.0.0.0", port=8000, debug=True)
+    # FlaskUI(app=app, server="flask", height=1000, width=1000).run()
