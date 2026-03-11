@@ -1,6 +1,0 @@
-{
-    "DockerRun.DisableAutoGenerateConfig": true,
-    "nuxt.isNuxtApp": false,
-    "cmake.configureOnOpen": true,
-    "cmake.sourceDirectory": "C:/Users/Zippy/Documents/GitHub/Volume-controller/NANO/.pio/libdeps/nano/Unity"
-}

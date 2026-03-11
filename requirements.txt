@@ -1,0 +1,7 @@
+flask
+flaskwebgui
+pyserial
+pystray
+pillow
+steelseries-sonar-py
+pyinstaller
