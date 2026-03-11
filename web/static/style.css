@@ -1,0 +1,271 @@
+body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: radial-gradient(1200px 600px at 10% 10%, #f5f6ff 0%, #c9ccff 40%, #8d91d6 100%);
+    font-family: "Trebuchet MS", "Lucida Sans Unicode", "Lucida Grande", "Lucida Sans", Arial, sans-serif;
+    color: #1b1b1f;
+}
+
+.panel {
+    width: min(1200px, 92vw);
+    background: linear-gradient(180deg, #f7f7ff 0%, #e7e9ff 100%);
+    border-radius: 18px;
+    padding: 22px 24px 28px;
+    box-shadow: 0 30px 60px rgba(10, 10, 25, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    border: 1px solid rgba(60, 60, 90, 0.25);
+}
+
+.panelHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 18px;
+    gap: 12px;
+}
+
+.headerActions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.title {
+    font-size: 1.6rem;
+    letter-spacing: 0.04em;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.invertBtn,
+.startupBtn,
+.safeBtn,
+.tuneBtn {
+    border: none;
+    padding: 10px 16px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, #ffffff 0%, #d9ddff 100%);
+    box-shadow: inset 0 1px 0 #ffffff, 0 6px 12px rgba(0, 0, 0, 0.2);
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+}
+
+.startupEnabled {
+    background: linear-gradient(180deg, #d9ffe6 0%, #9debb8 100%);
+}
+
+.statusRow {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(160px, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.statusCard {
+    background: linear-gradient(180deg, #ffffff 0%, #e1e4ff 100%);
+    border-radius: 12px;
+    padding: 10px 12px;
+    border: 1px solid rgba(40, 40, 70, 0.2);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.statusLabel {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #4b4f6a;
+}
+
+.statusValue {
+    font-size: 0.95rem;
+    font-weight: 700;
+}
+
+.ok {
+    color: #12633a;
+}
+
+.warn {
+    color: #8b1a1a;
+}
+
+.sliderGrid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(160px, 1fr));
+    gap: 16px;
+}
+
+.sliderCard {
+    background: linear-gradient(180deg, #fefeff 0%, #dfe2ff 100%);
+    border-radius: 14px;
+    padding: 14px 14px 18px;
+    border: 1px solid rgba(40, 40, 70, 0.2);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 10px 20px rgba(20, 20, 40, 0.2);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}
+
+.sliderTitle {
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    font-size: 0.85rem;
+}
+
+.channelSelect {
+    width: 100%;
+    border-radius: 10px;
+    padding: 8px 10px;
+    border: 1px solid rgba(40, 40, 70, 0.25);
+    background: linear-gradient(180deg, #ffffff 0%, #e1e4ff 100%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    font-size: 0.95rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.channelLabel {
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #2c2f4a;
+}
+
+.sliderWrap {
+    height: 260px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.volumeSlider {
+    -webkit-appearance: none;
+    appearance: none;
+    writing-mode: bt-lr;
+    -webkit-appearance: slider-vertical;
+    width: 22px;
+    height: 220px;
+    border-radius: 16px;
+    background: linear-gradient(180deg, #e8e9ff 0%, #c9ccff 50%, #2b2b34 50%, #2b2b34 100%);
+    box-shadow: inset 0 3px 6px rgba(0, 0, 0, 0.35), inset 0 -2px 6px rgba(255, 255, 255, 0.6);
+    outline: none;
+    border: 1px solid rgba(20, 20, 40, 0.4);
+}
+
+.volumeSlider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 46px;
+    height: 22px;
+    border-radius: 12px;
+    background: linear-gradient(180deg, #fefefe 0%, #b6b9e8 100%);
+    border: 1px solid rgba(40, 40, 70, 0.5);
+    box-shadow: 0 6px 10px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+    cursor: pointer;
+}
+
+.volumeSlider::-moz-range-thumb {
+    width: 46px;
+    height: 22px;
+    border-radius: 12px;
+    background: linear-gradient(180deg, #fefefe 0%, #b6b9e8 100%);
+    border: 1px solid rgba(40, 40, 70, 0.5);
+    box-shadow: 0 6px 10px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+    cursor: pointer;
+}
+
+.valueTag {
+    font-size: 0.9rem;
+    font-weight: 700;
+    padding: 6px 10px;
+    border-radius: 10px;
+    background: #1f2233;
+    color: #e8e9ff;
+    min-width: 42px;
+    text-align: center;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.tuneRow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    justify-content: space-between;
+}
+
+.tuneLabel {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #3b3f5b;
+}
+
+.tuneInput {
+    width: 80px;
+    border-radius: 8px;
+    border: 1px solid rgba(40, 40, 70, 0.25);
+    padding: 4px 6px;
+    text-align: center;
+    background: linear-gradient(180deg, #ffffff 0%, #e1e4ff 100%);
+}
+
+.monitorPanel {
+    margin-top: 18px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    background: #1f2233;
+    color: #e8e9ff;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.monitorTitle {
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 0.75rem;
+}
+
+.monitorRow {
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 0.95rem;
+}
+
+@media (max-width: 1000px) {
+    .sliderGrid {
+        grid-template-columns: repeat(2, minmax(160px, 1fr));
+    }
+    .statusRow {
+        grid-template-columns: repeat(2, minmax(160px, 1fr));
+    }
+    .panel {
+        width: min(720px, 94vw);
+    }
+}
+
+@media (max-width: 640px) {
+    .sliderGrid {
+        grid-template-columns: 1fr;
+    }
+    .statusRow {
+        grid-template-columns: 1fr;
+    }
+    .sliderWrap {
+        height: 200px;
+    }
+    .volumeSlider {
+        height: 180px;
+    }
+}

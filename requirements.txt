@@ -1,0 +1,7 @@
+flask
+flaskwebgui==1.1.9
+pyserial
+pystray
+pillow
+steelseries-sonar-py
+pyinstaller

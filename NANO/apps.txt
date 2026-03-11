@@ -1,4 +1,0 @@
-
-steam.exe,msedge.exe,Discord.exe,Spotify.exe
-msedge.exe,Discord.exe
-

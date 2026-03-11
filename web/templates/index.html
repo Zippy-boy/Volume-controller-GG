@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GG Hardware Mixer</title>
+    <link rel="icon" href="{{url_for('static',filename='icon.png')}}">
+    <link rel="stylesheet" href="{{url_for('static',filename='dist/css/output.css')}}">
+    <link rel="stylesheet" href="{{url_for('static',filename='style.css')}}">
+</head>
+
+<body>
+    <div class="panel">
+        <div class="panelHeader">
+            <div class="title">GG Hardware Mixer</div>
+            <div class="headerActions">
+                <button class="invertBtn" onclick="toggleInvert()" id="invert-btn">
+                    Invert: {% if settings and settings['invert'] %}On{% else %}Off{% endif %}
+                </button>
+                <button class="safeBtn" onclick="toggleSafeMode()" id="safe-btn">
+                    Safe Mode: {% if settings and settings['safe_mode'] %}On{% else %}Off{% endif %}
+                </button>
+                <button class="startupBtn" onclick="toggleStartup()" id="startup-btn">
+                    Add To Startup
+                </button>
+            </div>
+        </div>
+
+        <div class="statusRow">
+            <div class="statusCard">
+                <div class="statusLabel">Sonar</div>
+                <div class="statusValue" id="sonar-status">Checking...</div>
+            </div>
+            <div class="statusCard">
+                <div class="statusLabel">Device</div>
+                <div class="statusValue" id="serial-status">Waiting...</div>
+            </div>
+            <div class="statusCard">
+                <div class="statusLabel">COM Port</div>
+                <select class="channelSelect" id="com-select" onchange="setComPort(this.value)">
+                    <option value="">Auto</option>
+                </select>
+            </div>
+            <div class="statusCard">
+                <div class="statusLabel">Auto Calibrate</div>
+                <button class="tuneBtn" onclick="autoCalibrate()" id="cal-btn">Run</button>
+            </div>
+        </div>
+
+        <div class="sliderGrid">
+            {% for item in slider_map %}
+            <div class="sliderCard" data-slider="{{item['slider']}}">
+                <div class="sliderTitle">Slider {{item['slider']}}</div>
+                <select class="channelSelect" onchange="setChannel({{item['slider']}}, this.value)">
+                    {% for channel in channels %}
+                        <option value="{{channel}}" {% if channel == item['channel'] %}selected{% endif %}>
+                            {{channel_labels.get(channel, channel)}}
+                        </option>
+                    {% endfor %}
+                </select>
+                <div class="channelLabel" id="channel-label-{{item['slider']}}">
+                    {{channel_labels.get(item['channel'], item['channel'])}}
+                </div>
+                <div class="sliderWrap">
+                    <input id="slider-{{item['slider']}}" type="range" min="0" max="100" value="0"
+                        class="volumeSlider" oninput="changeVolume(this.value, {{item['slider']}})">
+                </div>
+                <div class="valueTag" id="value-{{item['slider']}}">0</div>
+                <div class="tuneRow">
+                    <label class="tuneLabel">Deadband</label>
+                    <input class="tuneInput" id="deadband-{{item['slider']}}" type="number" min="0" max="10" step="1" value="{{settings['deadband'][item['slider']-1]}}"
+                        onchange="updateTuning({{item['slider']}}, 'deadband', this.value)">
+                </div>
+                <div class="tuneRow">
+                    <label class="tuneLabel">Min ms</label>
+                    <input class="tuneInput" id="minms-{{item['slider']}}" type="number" min="0" max="500" step="5" value="{{settings['min_interval_ms'][item['slider']-1]}}"
+                        onchange="updateTuning({{item['slider']}}, 'min_interval_ms', this.value)">
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <div class="monitorPanel">
+            <div class="monitorTitle">Serial Monitor</div>
+            <div class="monitorRow" id="monitor-values">[0, 0, 0, 0, 0]</div>
+            <div class="monitorRow" id="monitor-age">Last update: --</div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/keep.alive.js')}}"></script>
+    <script>
+        function asd(num, in_min, in_max, out_min, out_max) {
+            return (num - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+        }
+
+        const dragging = {};
+        let startupEnabled = false;
+        let lastTs = 0;
+        const lastUiValues = [null, null, null, null, null];
+        let pollTimer = null;
+        let sonarTimer = null;
+        let pollValuesInterval = 600;
+        let pollSonarInterval = 7000;
+
+        function changeVolume(volume, slider) {
+            volume = asd(volume, 100, 0, 0, 1);
+            const valueTag = document.getElementById('value-' + slider);
+            if (valueTag) valueTag.textContent = Math.round(volume * 100);
+            fetch('/change_volume', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ volume: volume, slider: slider })
+            }).catch(() => {});
+            updateSliderFill(slider);
+        }
+
+        function setChannel(slider, channel) {
+            var label = document.getElementById('channel-label-' + slider);
+            if (label) {
+                var labels = {
+                    master: 'master',
+                    game: 'game',
+                    chatRender: 'chat',
+                    media: 'media',
+                    aux: 'aux'
+                };
+                label.textContent = labels[channel] || channel;
+            }
+            fetch('/map_channel', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ slider: slider, channel: channel })
+            }).catch((error) => {
+                console.error('Error:', error);
+            });
+        }
+
+        function updateSliderFill(slider) {
+            const el = document.getElementById('slider-' + slider);
+            if (!el) return;
+            const val = (el.value - el.min) / (el.max - el.min) * 100;
+            el.style.background = `linear-gradient(180deg, #e8e9ff 0%, #c9ccff ${val}%, #2b2b34 ${val}%, #2b2b34 100%)`;
+        }
+
+        function attachSliderHandlers() {
+            document.querySelectorAll('.volumeSlider').forEach((el) => {
+                const sliderId = el.id.replace('slider-', '');
+                dragging[sliderId] = false;
+                el.addEventListener('pointerdown', () => { dragging[sliderId] = true; });
+                el.addEventListener('pointerup', () => { dragging[sliderId] = false; });
+                el.addEventListener('pointerleave', () => { dragging[sliderId] = false; });
+                updateSliderFill(sliderId);
+            });
+        }
+
+        function pollValues() {
+            fetch('/values', { cache: 'no-store' })
+                .then(response => response.json())
+                .then(data => {
+                    if (!data || !data.values) return;
+                    const now = Date.now() / 1000;
+                    lastTs = data.ts || lastTs;
+                    const age = lastTs ? (now - lastTs).toFixed(1) : '--';
+                    const monitorValues = document.getElementById('monitor-values');
+                    const monitorAge = document.getElementById('monitor-age');
+                    const monitorText = JSON.stringify(data.values);
+                    if (monitorValues && monitorValues.textContent !== monitorText) {
+                        monitorValues.textContent = monitorText;
+                    }
+                    if (monitorAge) monitorAge.textContent = 'Last update: ' + age + 's';
+
+                    const serialStatus = document.getElementById('serial-status');
+                    if (serialStatus) {
+                        if (lastTs && (now - lastTs) < 2) {
+                            serialStatus.textContent = 'Connected';
+                            serialStatus.classList.add('ok');
+                            serialStatus.classList.remove('warn');
+                        } else {
+                            serialStatus.textContent = 'Disconnected';
+                            serialStatus.classList.remove('ok');
+                            serialStatus.classList.add('warn');
+                        }
+                    }
+
+                    data.values.forEach((val, idx) => {
+                        const slider = idx + 1;
+                        if (dragging[slider]) return;
+                        if (lastUiValues[idx] === val) return;
+                        const el = document.getElementById('slider-' + slider);
+                        const tag = document.getElementById('value-' + slider);
+                        if (el) {
+                            el.value = val;
+                            updateSliderFill(slider);
+                        }
+                        if (tag) tag.textContent = val;
+                        lastUiValues[idx] = val;
+                    });
+                })
+                .catch(() => {});
+        }
+
+        function syncStartupStatus() {
+            fetch('/startup/status', { cache: 'no-store' })
+                .then(response => response.json())
+                .then(data => {
+                    const btn = document.getElementById('startup-btn');
+                    if (!btn) return;
+                    startupEnabled = !!(data && data.enabled);
+                    if (startupEnabled) {
+                        btn.textContent = 'Startup Enabled';
+                        btn.classList.add('startupEnabled');
+                    } else {
+                        btn.textContent = 'Add To Startup';
+                        btn.classList.remove('startupEnabled');
+                    }
+                })
+                .catch(() => {});
+        }
+
+        function toggleStartup() {
+            const url = startupEnabled ? '/startup/disable' : '/startup/enable';
+            fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            })
+            .then(() => syncStartupStatus())
+            .catch((error) => {
+                console.error('Error:', error);
+            });
+        }
+
+        function updateTuning(slider, key, value) {
+            const payload = { slider: slider };
+            payload[key] = value;
+            fetch('/settings/update', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(payload)
+            }).catch((error) => {
+                console.error('Error:', error);
+            });
+        }
+
+        function toggleInvert() {
+            fetch('/toggle_invert', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                var btn = document.getElementById('invert-btn');
+                if (btn) {
+                    btn.textContent = 'Invert: ' + (data.invert ? 'On' : 'Off');
+                }
+            })
+            .catch((error) => {
+                console.error('Error:', error);
+            });
+        }
+
+        function toggleSafeMode() {
+            fetch('/settings/toggle_safe', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                var btn = document.getElementById('safe-btn');
+                if (btn) {
+                    btn.textContent = 'Safe Mode: ' + (data.safe_mode ? 'On' : 'Off');
+                }
+            })
+            .catch((error) => {
+                console.error('Error:', error);
+            });
+        }
+
+        function loadPorts() {
+            fetch('/serial/ports', { cache: 'no-store' })
+                .then(response => response.json())
+                .then(data => {
+                    const sel = document.getElementById('com-select');
+                    if (!sel) return;
+                    const current = "{{settings.get('com_port','')}}";
+                    sel.innerHTML = '<option value="">Auto</option>';
+                    (data.ports || []).forEach(p => {
+                        const opt = document.createElement('option');
+                        opt.value = p.device;
+                        opt.textContent = p.device + ' - ' + p.description;
+                        if (p.device === current) opt.selected = true;
+                        sel.appendChild(opt);
+                    });
+                })
+                .catch(() => {});
+        }
+
+        function setComPort(port) {
+            fetch('/serial/select', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ com_port: port })
+            }).catch((error) => {
+                console.error('Error:', error);
+            });
+        }
+
+        function pollSonar() {
+            fetch('/sonar/status', { cache: 'no-store' })
+                .then(response => response.json())
+                .then(data => {
+                    const el = document.getElementById('sonar-status');
+                    if (!el) return;
+                    if (data.ok) {
+                        el.textContent = data.streamer_mode ? 'OK (streamer)' : 'OK (classic)';
+                        el.classList.add('ok');
+                        el.classList.remove('warn');
+                    } else {
+                        el.textContent = 'Error';
+                        el.classList.add('warn');
+                        el.classList.remove('ok');
+                    }
+                })
+                .catch(() => {});
+        }
+
+        function autoCalibrate() {
+            const btn = document.getElementById('cal-btn');
+            if (btn) btn.textContent = 'Running...';
+            const samples = [];
+            const start = Date.now();
+            const timer = setInterval(() => {
+                fetch('/values', { cache: 'no-store' })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data && data.values) samples.push(data.values);
+                    })
+                    .catch(() => {});
+                if (Date.now() - start > 2000) {
+                    clearInterval(timer);
+                    const maxDelta = [0, 0, 0, 0, 0];
+                    for (let i = 1; i < samples.length; i++) {
+                        for (let s = 0; s < 5; s++) {
+                            const d = Math.abs(samples[i][s] - samples[i - 1][s]);
+                            if (d > maxDelta[s]) maxDelta[s] = d;
+                        }
+                    }
+                    for (let s = 0; s < 5; s++) {
+                        const val = Math.max(2, Math.min(10, Math.ceil(maxDelta[s])));
+                        const input = document.getElementById('deadband-' + (s + 1));
+                        if (input) input.value = val;
+                        updateTuning(s + 1, 'deadband', val);
+                    }
+                    if (btn) btn.textContent = 'Run';
+                }
+            }, 150);
+        }
+
+        attachSliderHandlers();
+        syncStartupStatus();
+        loadPorts();
+        pollSonar();
+        function startPollers() {
+            if (pollTimer) clearInterval(pollTimer);
+            if (sonarTimer) clearInterval(sonarTimer);
+            pollTimer = setInterval(pollValues, pollValuesInterval);
+            sonarTimer = setInterval(pollSonar, pollSonarInterval);
+        }
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                pollValuesInterval = 1500;
+                pollSonarInterval = 15000;
+            } else {
+                pollValuesInterval = 600;
+                pollSonarInterval = 7000;
+            }
+            startPollers();
+        });
+        startPollers();
+    </script>
+</body>
+
+</html>
