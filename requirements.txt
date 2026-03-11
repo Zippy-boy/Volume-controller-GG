@@ -5,3 +5,4 @@ pystray
 pillow
 steelseries-sonar-py
 pyinstaller
+pytest

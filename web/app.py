@@ -11,11 +11,17 @@ import time
 
 
 def _get_asset_dir():
+    env_asset = os.environ.get("GGHM_ASSET_DIR")
+    if env_asset:
+        return Path(env_asset)
     if getattr(sys, "frozen", False):
         return Path(sys._MEIPASS) / "web"
     return Path(__file__).resolve().parent
 
 def _get_data_dir():
+    env_data = os.environ.get("GGHM_DATA_DIR")
+    if env_data:
+        return Path(env_data)
     if getattr(sys, "frozen", False):
         base = Path(os.environ.get("APPDATA", str(Path.home() / "AppData" / "Roaming")))
         return base / "GG Hardware Mixer"
