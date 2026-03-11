@@ -1,5 +1,5 @@
 flask
-flaskwebgui
+flaskwebgui==1.1.9
 pyserial
 pystray
 pillow

@@ -46,9 +46,15 @@ last_error_msg = ""
 last_values = [0, 0, 0, 0, 0]
 values_lock = threading.Lock()
 map_mtime = None
+map_last_check = 0.0
 slider_map = None
 settings_mtime = None
+settings_last_check = 0.0
 settings_data = {"invert": False, "com_port": "", "safe_mode": True}
+MAP_CHECK_INTERVAL = 0.5
+SETTINGS_CHECK_INTERVAL = 0.5
+VALUES_WRITE_INTERVAL = 0.5
+ICON_UPDATE_INTERVAL = 2.0
 
 def ensure_data_files():
     if not MAP_FILE.exists():
@@ -143,7 +149,11 @@ def try_connect_serial():
 
 
 def load_slider_map(force=False):
-    global map_mtime, slider_map
+    global map_mtime, slider_map, map_last_check
+    now = time.time()
+    if not force and now - map_last_check < MAP_CHECK_INTERVAL:
+        return
+    map_last_check = now
     try:
         mtime = MAP_FILE.stat().st_mtime
     except FileNotFoundError:
@@ -155,7 +165,11 @@ def load_slider_map(force=False):
 
 
 def load_settings(force=False):
-    global settings_mtime, settings_data
+    global settings_mtime, settings_data, settings_last_check
+    now = time.time()
+    if not force and now - settings_last_check < SETTINGS_CHECK_INTERVAL:
+        return
+    settings_last_check = now
     try:
         mtime = SETTINGS_FILE.stat().st_mtime
     except FileNotFoundError:
@@ -281,6 +295,8 @@ def read_serial_data(event: Event):
 
     last_sent = [0.0, 0.0, 0.0, 0.0, 0.0]
     prev = None
+    last_write = 0.0
+    last_written_vals = None
     while True:
         if event.is_set():
             break
@@ -300,12 +316,31 @@ def read_serial_data(event: Event):
             prev = [nob1, nob2, nob3, nob4, nob5]
         now = time.time()
 
+        load_settings()
+        load_slider_map()
+        deadband = settings_data.get("deadband", [2, 2, 2, 2, 2])
+        min_ms = settings_data.get("min_interval_ms", [30, 30, 30, 30, 30])
+        invert = settings_data.get("invert", False)
+        channels = None
+        if slider_map:
+            channels = [item.get("channel", CHANNELS[0]) for item in slider_map]
+
         for idx, nob in enumerate([nob1, nob2, nob3, nob4, nob5]):
-            min_delta = get_deadband(idx)
-            min_interval = get_min_interval(idx)
+            try:
+                min_delta = int(deadband[idx])
+            except Exception:
+                min_delta = 2
+            try:
+                min_interval = max(0, int(min_ms[idx])) / 1000.0
+            except Exception:
+                min_interval = 0.03
             if abs(nob - prev[idx]) >= min_delta and (now - last_sent[idx]) >= min_interval:
-                channel = getChannel(idx + 1)
-                change_volume(channel, maybe_invert(nob))
+                if channels and idx < len(channels):
+                    channel = channels[idx]
+                else:
+                    channel = CHANNELS[0]
+                value = 100 - nob if invert else nob
+                change_volume(channel, value)
                 last_sent[idx] = now
                 prev[idx] = nob
 
@@ -316,24 +351,36 @@ def read_serial_data(event: Event):
             last_values[3] = nob4
             last_values[4] = nob5
 
-        try:
-            tmp_path = str(VALUES_FILE) + ".tmp"
-            with open(tmp_path, "w") as f:
-                json.dump({"values": [nob1, nob2, nob3, nob4, nob5], "ts": time.time()}, f)
-            os.replace(tmp_path, VALUES_FILE)
-        except Exception:
-            pass
+        # Write values at most 5x/sec, and only if changed.
+        vals_list = [nob1, nob2, nob3, nob4, nob5]
+        if last_written_vals != vals_list and (now - last_write) >= VALUES_WRITE_INTERVAL:
+            try:
+                tmp_path = str(VALUES_FILE) + ".tmp"
+                with open(tmp_path, "w") as f:
+                    json.dump({"values": vals_list, "ts": time.time()}, f)
+                os.replace(tmp_path, VALUES_FILE)
+                last_write = now
+                last_written_vals = vals_list
+            except Exception:
+                pass
 
 
 def icon_status_loop(icon, base_img):
+    last_status = None
+    last_title = None
     while not event.is_set():
         status = get_status()
-        icon.icon = make_status_icon(base_img, status)
+        if status != last_status:
+            icon.icon = make_status_icon(base_img, status)
+            last_status = status
         with values_lock:
             vals = list(last_values)
         port = get_com_port() or "auto"
-        icon.title = f"GG Mixer - {status} - {port} - {vals}"
-        time.sleep(0.5)
+        title = f"GG Mixer - {status} - {port} - {vals}"
+        if title != last_title:
+            icon.title = title
+            last_title = title
+        time.sleep(ICON_UPDATE_INTERVAL)
 
 
 ensure_data_files()

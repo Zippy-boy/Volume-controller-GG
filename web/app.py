@@ -6,6 +6,7 @@ else:
         from flaskwebgui import FlaskUI
     except Exception:
         FlaskUI = None
+import traceback
 import json
 import os
 from pathlib import Path
@@ -48,6 +49,8 @@ app = Flask(
 
 sonar = None
 last_sonar_try = 0.0
+last_sonar_status = None
+last_sonar_status_check = 0.0
 CHANNELS = ["master", "game", "chatRender", "media", "aux"]
 CHANNEL_LABELS = {
     "master": "master",
@@ -83,7 +86,18 @@ if not os.path.exists(DATA_DIR / 'settings.json'):
 # Check if values.json exists, if not, create it
 if not os.path.exists(DATA_DIR / 'values.json'):
     with open(DATA_DIR / 'values.json', 'w') as file:
-        json.dump({"values": [0, 0, 0, 0, 0]}, file)
+        json.dump({"values": [0, 0, 0, 0, 0], "ts": 0}, file)
+
+SETTINGS_FILE = DATA_DIR / "settings.json"
+VALUES_FILE = DATA_DIR / "values.json"
+SETTINGS_CHECK_INTERVAL = 0.5
+VALUES_CHECK_INTERVAL = 0.3
+_settings_cache = None
+_settings_mtime = None
+_settings_last_check = 0.0
+_values_cache = {"values": [0, 0, 0, 0, 0], "ts": 0}
+_values_mtime = None
+_values_last_check = 0.0
 
 def _normalize_settings(settings):
     settings.setdefault("invert", False)
@@ -97,13 +111,34 @@ def _normalize_settings(settings):
         settings["min_interval_ms"] += [30] * (5 - len(settings["min_interval_ms"]))
     return settings
 
-def get_settings():
-    with open(DATA_DIR / "settings.json", "r") as file:
-        return _normalize_settings(json.load(file))
+def get_settings(force=False):
+    global _settings_cache, _settings_mtime, _settings_last_check
+    now = time.time()
+    if not force and _settings_cache is not None and now - _settings_last_check < SETTINGS_CHECK_INTERVAL:
+        return _settings_cache
+    _settings_last_check = now
+    try:
+        mtime = SETTINGS_FILE.stat().st_mtime
+    except FileNotFoundError:
+        _settings_cache = _normalize_settings({})
+        return _settings_cache
+    if force or _settings_cache is None or _settings_mtime != mtime:
+        with open(SETTINGS_FILE, "r") as file:
+            _settings_cache = _normalize_settings(json.load(file))
+        _settings_mtime = mtime
+    return _settings_cache
 
 def set_settings(settings):
-    with open(DATA_DIR / "settings.json", "w") as file:
-        json.dump(_normalize_settings(settings), file)
+    global _settings_cache, _settings_mtime, _settings_last_check
+    normalized = _normalize_settings(settings)
+    with open(SETTINGS_FILE, "w") as file:
+        json.dump(normalized, file)
+    try:
+        _settings_mtime = SETTINGS_FILE.stat().st_mtime
+    except FileNotFoundError:
+        _settings_mtime = None
+    _settings_cache = normalized
+    _settings_last_check = time.time()
 
 def ensure_sonar():
     global sonar, last_sonar_try
@@ -119,6 +154,40 @@ def ensure_sonar():
     except Exception:
         sonar = None
         return False
+
+def get_values():
+    global _values_cache, _values_mtime, _values_last_check
+    now = time.time()
+    if now - _values_last_check < VALUES_CHECK_INTERVAL:
+        return _values_cache
+    _values_last_check = now
+    try:
+        mtime = VALUES_FILE.stat().st_mtime
+    except FileNotFoundError:
+        return _values_cache
+    if _values_mtime != mtime:
+        with open(VALUES_FILE, "r") as file:
+            _values_cache = json.load(file)
+        _values_mtime = mtime
+    return _values_cache
+
+def get_sonar_status():
+    global last_sonar_status, last_sonar_status_check
+    now = time.time()
+    if last_sonar_status is not None and now - last_sonar_status_check < 2.0:
+        return last_sonar_status
+    last_sonar_status_check = now
+    if ensure_sonar():
+        last_sonar_status = {
+            "ok": True,
+            "streamer_mode": bool(sonar.streamer_mode)
+        }
+    else:
+        last_sonar_status = {
+            "ok": False,
+            "error": "Sonar not available"
+        }
+    return last_sonar_status
 
 def change_volume(channel, percentage):
     if not ensure_sonar():
@@ -180,11 +249,10 @@ def change_volume_route():
 
 @app.route('/values', methods=['GET'])
 def values():
-    with open(DATA_DIR / "values.json", "r") as file:
-        resp = jsonify(json.load(file))
-        resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
-        resp.headers["Pragma"] = "no-cache"
-        return resp
+    resp = jsonify(get_values())
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    resp.headers["Pragma"] = "no-cache"
+    return resp
 
 @app.route('/toggle_invert', methods=['POST'])
 def toggle_invert():
@@ -283,22 +351,17 @@ def serial_select():
 
 @app.route('/sonar/status', methods=['GET'])
 def sonar_status():
-    try:
-        test = Sonar()
-        return jsonify({
-            "ok": True,
-            "streamer_mode": bool(test.streamer_mode)
-        })
-    except Exception as e:
-        return jsonify({
-            "ok": False,
-            "error": str(e)
-        })
+    return jsonify(get_sonar_status())
 
 if __name__ == '__main__':
     # Runs the app in FlaskUI which just opens up a 
     # web browser and runs the app
+    log_path = DATA_DIR / "web.log"
     if FlaskUI is not None:
-        FlaskUI(app=app, server="flask").run()
-    else:
-        app.run()
+        try:
+            FlaskUI(app=app, server="flask").run()
+            sys.exit(0)
+        except Exception:
+            log_path.write_text(traceback.format_exc())
+    # No browser fallback. Show error and exit.
+    sys.exit(1)

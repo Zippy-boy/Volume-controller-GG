@@ -10,13 +10,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
 let url = document.location
 let route = "/flaskwebgui-keep-server-alive"
-let interval_request = 3 * 1000 //sec
+let interval_request = 10 * 1000 //sec
 
 function keep_alive_server(){
     getRequest(url + route)
-    .then(data => console.log(data))
+    .catch(() => {})
 }
 
-setInterval(keep_alive_server, interval_request)()
+setInterval(keep_alive_server, interval_request)
+keep_alive_server()
 
 })

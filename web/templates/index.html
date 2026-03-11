@@ -89,8 +89,6 @@
         </div>
     </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/flowbite/2.3.0/flowbite.min.js"></script>
-    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
     <script src="{{ url_for('static', filename='js/keep.alive.js')}}"></script>
     <script>
         function asd(num, in_min, in_max, out_min, out_max) {
@@ -100,20 +98,23 @@
         const dragging = {};
         let startupEnabled = false;
         let lastTs = 0;
+        const lastUiValues = [null, null, null, null, null];
+        let pollTimer = null;
+        let sonarTimer = null;
+        let pollValuesInterval = 600;
+        let pollSonarInterval = 7000;
 
         function changeVolume(volume, slider) {
             volume = asd(volume, 100, 0, 0, 1);
             const valueTag = document.getElementById('value-' + slider);
             if (valueTag) valueTag.textContent = Math.round(volume * 100);
-            $.ajax({
-                url: '/change_volume',
-                type: 'POST',
-                data: JSON.stringify({'volume': volume, 'slider': slider}),
-                contentType: 'application/json;charset=UTF-8',
-                error: function (error) {
-                    console.log(error);
-                }
-            });
+            fetch('/change_volume', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ volume: volume, slider: slider })
+            }).catch(() => {});
             updateSliderFill(slider);
         }
 
@@ -168,7 +169,10 @@
                     const age = lastTs ? (now - lastTs).toFixed(1) : '--';
                     const monitorValues = document.getElementById('monitor-values');
                     const monitorAge = document.getElementById('monitor-age');
-                    if (monitorValues) monitorValues.textContent = JSON.stringify(data.values);
+                    const monitorText = JSON.stringify(data.values);
+                    if (monitorValues && monitorValues.textContent !== monitorText) {
+                        monitorValues.textContent = monitorText;
+                    }
                     if (monitorAge) monitorAge.textContent = 'Last update: ' + age + 's';
 
                     const serialStatus = document.getElementById('serial-status');
@@ -187,6 +191,7 @@
                     data.values.forEach((val, idx) => {
                         const slider = idx + 1;
                         if (dragging[slider]) return;
+                        if (lastUiValues[idx] === val) return;
                         const el = document.getElementById('slider-' + slider);
                         const tag = document.getElementById('value-' + slider);
                         if (el) {
@@ -194,6 +199,7 @@
                             updateSliderFill(slider);
                         }
                         if (tag) tag.textContent = val;
+                        lastUiValues[idx] = val;
                     });
                 })
                 .catch(() => {});
@@ -369,8 +375,23 @@
         syncStartupStatus();
         loadPorts();
         pollSonar();
-        setInterval(pollValues, 200);
-        setInterval(pollSonar, 2000);
+        function startPollers() {
+            if (pollTimer) clearInterval(pollTimer);
+            if (sonarTimer) clearInterval(sonarTimer);
+            pollTimer = setInterval(pollValues, pollValuesInterval);
+            sonarTimer = setInterval(pollSonar, pollSonarInterval);
+        }
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                pollValuesInterval = 1500;
+                pollSonarInterval = 15000;
+            } else {
+                pollValuesInterval = 600;
+                pollSonarInterval = 7000;
+            }
+            startPollers();
+        });
+        startPollers();
     </script>
 </body>
 
