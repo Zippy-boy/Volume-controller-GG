@@ -1,5 +1,11 @@
 from flask import Flask, render_template, request, redirect, url_for, jsonify
-from flaskwebgui import FlaskUI
+if os.environ.get("GGHM_TESTING") == "1":
+    FlaskUI = None
+else:
+    try:
+        from flaskwebgui import FlaskUI
+    except Exception:
+        FlaskUI = None
 import json
 import os
 from pathlib import Path
@@ -292,4 +298,7 @@ def sonar_status():
 if __name__ == '__main__':
     # Runs the app in FlaskUI which just opens up a 
     # web browser and runs the app
-    FlaskUI(app=app, server="flask").run()
+    if FlaskUI is not None:
+        FlaskUI(app=app, server="flask").run()
+    else:
+        app.run()

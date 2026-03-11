@@ -7,6 +7,7 @@ from pathlib import Path
 
 def load_app(tmp_path):
     os.environ["GGHM_DATA_DIR"] = str(tmp_path)
+    os.environ["GGHM_TESTING"] = "1"
     module_name = f"app_module_{uuid.uuid4().hex}"
     app_path = Path(__file__).resolve().parents[1] / "web" / "app.py"
     spec = importlib.util.spec_from_file_location(module_name, app_path)
