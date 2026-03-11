@@ -6,6 +6,9 @@ on:
       - "v*"
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build-windows:
     runs-on: windows-latest
@@ -36,14 +39,14 @@ jobs:
         with:
           name: gg-hardware-mixer-windows
           path: |
-            dist\GGHardwareServer.exe
-            dist\GGHardwareWeb.exe
-            dist\GGHardwareMixer-Setup.exe
+            dist/GGHardwareServer.exe
+            dist/GGHardwareWeb.exe
+            dist/GGHardwareMixer-Setup.exe
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist\GGHardwareServer.exe
-            dist\GGHardwareWeb.exe
-            dist\GGHardwareMixer-Setup.exe
+            dist/GGHardwareServer.exe
+            dist/GGHardwareWeb.exe
+            dist/GGHardwareMixer-Setup.exe
