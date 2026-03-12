@@ -24,8 +24,9 @@ Source: "dist\{#AppExeServer}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "dist\{#AppExeWeb}"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExeWeb}"
-Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeWeb}"; Tasks: desktopicon
+Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExeServer}"
+Name: "{autoprograms}\{#AppName} UI"; Filename: "{app}\{#AppExeWeb}"
+Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeServer}"; Tasks: desktopicon
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop icon"; GroupDescription: "Additional icons:"; Flags: unchecked
@@ -33,7 +34,6 @@ Name: "startup"; Description: "Start GG Hardware Mixer on Windows startup"; Grou
 
 [Run]
 Filename: "{app}\{#AppExeServer}"; Description: "Start GG Hardware Mixer server"; Flags: nowait postinstall skipifsilent
-Filename: "{app}\{#AppExeWeb}"; Description: "Open GG Hardware Mixer UI"; Flags: nowait postinstall skipifsilent
 
 [Registry]
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "GGHardwareServer"; ValueData: "{app}\{#AppExeServer}"; Tasks: startup

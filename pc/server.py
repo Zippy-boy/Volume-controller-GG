@@ -41,10 +41,13 @@ sonar = None
 last_sonar_try = 0.0
 ser = None
 last_serial_try = 0.0
-last_error_time = 0.0
+last_serial_error_time = 0.0
+last_sonar_error_time = 0.0
 last_error_msg = ""
 last_values = [0, 0, 0, 0, 0]
 values_lock = threading.Lock()
+last_device_seen = 0.0
+DEVICE_TIMEOUT = 2.5
 map_mtime = None
 map_last_check = 0.0
 slider_map = None
@@ -83,7 +86,7 @@ if ctypes.windll.kernel32.GetLastError() == 183:
 
 
 def ensure_sonar():
-    global last_sonar_try, sonar, last_error_time, last_error_msg
+    global last_sonar_try, sonar, last_sonar_error_time, last_error_msg
     now = time.time()
     if sonar is not None:
         return True
@@ -95,7 +98,7 @@ def ensure_sonar():
         return True
     except Exception as e:
         sonar = None
-        last_error_time = time.time()
+        last_sonar_error_time = time.time()
         last_error_msg = str(e)
         return False
 
@@ -120,7 +123,7 @@ def getAudionoPort():
 
 
 def try_connect_serial():
-    global ser, last_serial_try, last_error_time, last_error_msg
+    global ser, last_serial_try, last_serial_error_time, last_error_msg
     now = time.time()
     if ser is not None and ser.is_open:
         return True
@@ -143,7 +146,7 @@ def try_connect_serial():
         return True
     except Exception as e:
         ser = None
-        last_error_time = time.time()
+        last_serial_error_time = time.time()
         last_error_msg = str(e)
         return False
 
@@ -268,23 +271,26 @@ def make_status_icon(base_img, status):
 
 def get_status():
     now = time.time()
-    if last_error_time and now - last_error_time < 5:
+    if last_serial_error_time and now - last_serial_error_time < 5:
         return "error"
-    if ser is not None and ser.is_open:
+    if last_device_seen and (now - last_device_seen) < DEVICE_TIMEOUT:
         return "connected"
     return "disconnected"
 
 
 def read_serial_data(event: Event):
-    global ser
-    def read_values():
-        while True:
+    global ser, last_device_seen
+    def read_values(timeout_sec=2.5):
+        deadline = time.time() + timeout_sec
+        while time.time() < deadline:
             if ser is None:
                 return None
             try:
                 line = ser.readline().decode("utf-8", "ignore").strip()
             except Exception:
                 return None
+            if not line:
+                continue
             parts = [p.strip() for p in line.split(",") if p.strip() != ""]
             if len(parts) < 5:
                 continue
@@ -292,6 +298,7 @@ def read_serial_data(event: Event):
                 return list(map(int, parts[:5]))
             except ValueError:
                 continue
+        return None
 
     last_sent = [0.0, 0.0, 0.0, 0.0, 0.0]
     prev = None
@@ -307,11 +314,17 @@ def read_serial_data(event: Event):
 
         vals = read_values()
         if vals is None:
+            try:
+                if ser is not None:
+                    ser.close()
+            except Exception:
+                pass
             ser = None
             time.sleep(0.1)
             continue
 
         nob1, nob2, nob3, nob4, nob5 = vals
+        last_device_seen = time.time()
         if prev is None:
             prev = [nob1, nob2, nob3, nob4, nob5]
         now = time.time()
