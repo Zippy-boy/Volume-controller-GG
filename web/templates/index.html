@@ -19,9 +19,6 @@
                 <button class="invertBtn" onclick="toggleInvert()" id="invert-btn">
                     Invert: {% if settings and settings['invert'] %}On{% else %}Off{% endif %}
                 </button>
-                <button class="safeBtn" onclick="toggleSafeMode()" id="safe-btn">
-                    Safe Mode: {% if settings and settings['safe_mode'] %}On{% else %}Off{% endif %}
-                </button>
                 <button class="startupBtn" onclick="toggleStartup()" id="startup-btn">
                     Add To Startup
                 </button>
@@ -77,6 +74,13 @@
                     <label class="tuneLabel">Min ms</label>
                     <input class="tuneInput" id="minms-{{item['slider']}}" type="number" min="0" max="500" step="5" value="{{settings['min_interval_ms'][item['slider']-1]}}"
                         onchange="updateTuning({{item['slider']}}, 'min_interval_ms', this.value)">
+                </div>
+                <div class="tuneRow">
+                    <label class="tuneLabel">Smoothing</label>
+                    <button class="smoothBtn {% if settings['smoothing'][item['slider']-1] %}smoothOn{% endif %}" id="smooth-{{item['slider']}}"
+                        onclick="toggleSmoothing({{item['slider']}})">
+                        {% if settings['smoothing'][item['slider']-1] %}On{% else %}Off{% endif %}
+                    </button>
                 </div>
             </div>
             {% endfor %}
@@ -251,6 +255,17 @@
             });
         }
 
+        function toggleSmoothing(slider) {
+            const btn = document.getElementById('smooth-' + slider);
+            const isOn = btn && btn.classList.contains('smoothOn');
+            const next = !isOn;
+            if (btn) {
+                btn.classList.toggle('smoothOn', next);
+                btn.textContent = next ? 'On' : 'Off';
+            }
+            updateTuning(slider, 'smoothing', next ? 1 : 0);
+        }
+
         function toggleInvert() {
             fetch('/toggle_invert', {
                 method: 'POST',
@@ -263,25 +278,6 @@
                 var btn = document.getElementById('invert-btn');
                 if (btn) {
                     btn.textContent = 'Invert: ' + (data.invert ? 'On' : 'Off');
-                }
-            })
-            .catch((error) => {
-                console.error('Error:', error);
-            });
-        }
-
-        function toggleSafeMode() {
-            fetch('/settings/toggle_safe', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                var btn = document.getElementById('safe-btn');
-                if (btn) {
-                    btn.textContent = 'Safe Mode: ' + (data.safe_mode ? 'On' : 'Off');
                 }
             })
             .catch((error) => {
@@ -351,20 +347,31 @@
                         if (data && data.values) samples.push(data.values);
                     })
                     .catch(() => {});
-                if (Date.now() - start > 2000) {
+                if (Date.now() - start > 10000) {
                     clearInterval(timer);
-                    const maxDelta = [0, 0, 0, 0, 0];
+                    const deltas = [[], [], [], [], []];
                     for (let i = 1; i < samples.length; i++) {
                         for (let s = 0; s < 5; s++) {
                             const d = Math.abs(samples[i][s] - samples[i - 1][s]);
-                            if (d > maxDelta[s]) maxDelta[s] = d;
+                            deltas[s].push(d);
                         }
                     }
+                    function percentile(values, p) {
+                        if (!values.length) return 0;
+                        const sorted = values.slice().sort((a, b) => a - b);
+                        const idx = Math.floor((p / 100) * (sorted.length - 1));
+                        return sorted[idx];
+                    }
                     for (let s = 0; s < 5; s++) {
-                        const val = Math.max(2, Math.min(10, Math.ceil(maxDelta[s])));
+                        const jitter = percentile(deltas[s], 95);
+                        const val = Math.max(2, Math.min(10, Math.ceil(jitter)));
                         const input = document.getElementById('deadband-' + (s + 1));
                         if (input) input.value = val;
                         updateTuning(s + 1, 'deadband', val);
+                        const minMs = Math.max(30, Math.min(200, Math.round(30 + jitter * 12)));
+                        const minInput = document.getElementById('minms-' + (s + 1));
+                        if (minInput) minInput.value = minMs;
+                        updateTuning(s + 1, 'min_interval_ms', minMs);
                     }
                     if (btn) btn.textContent = 'Run';
                 }

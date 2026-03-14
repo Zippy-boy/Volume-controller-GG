@@ -79,8 +79,10 @@ if not os.path.exists(DATA_DIR / 'settings.json'):
             "invert": False,
             "deadband": [2, 2, 2, 2, 2],
             "min_interval_ms": [30, 30, 30, 30, 30],
+            "smoothing": [False, False, False, False, False],
             "com_port": "",
-            "safe_mode": True
+            "safe_mode": True,
+            "startup_enabled": False
         }, file)
 
 # Check if values.json exists, if not, create it
@@ -103,12 +105,16 @@ def _normalize_settings(settings):
     settings.setdefault("invert", False)
     settings.setdefault("deadband", [2, 2, 2, 2, 2])
     settings.setdefault("min_interval_ms", [30, 30, 30, 30, 30])
+    settings.setdefault("smoothing", [False, False, False, False, False])
     settings.setdefault("com_port", "")
     settings.setdefault("safe_mode", True)
+    settings.setdefault("startup_enabled", False)
     if len(settings["deadband"]) < 5:
         settings["deadband"] += [2] * (5 - len(settings["deadband"]))
     if len(settings["min_interval_ms"]) < 5:
         settings["min_interval_ms"] += [30] * (5 - len(settings["min_interval_ms"]))
+    if len(settings["smoothing"]) < 5:
+        settings["smoothing"] += [False] * (5 - len(settings["smoothing"]))
     return settings
 
 def get_settings(force=False):
@@ -291,6 +297,9 @@ def startup_enable():
     if getattr(sys, "frozen", False):
         server_exe = Path(sys.executable).with_name("GGHardwareServer.exe")
         _set_run_value("GGHardwareServer", f'\"{server_exe}\"')
+        settings = get_settings()
+        settings["startup_enabled"] = True
+        set_settings(settings)
         return jsonify({"enabled": True})
     python_path = sys.executable
     pythonw_path = python_path.replace("python.exe", "pythonw.exe")
@@ -298,6 +307,9 @@ def startup_enable():
         python_path = pythonw_path
     server_script = Path(__file__).resolve().parents[1] / "pc" / "server.py"
     _set_run_value("GGHardwareServer", f'\"{python_path}\" \"{server_script}\"')
+    settings = get_settings()
+    settings["startup_enabled"] = True
+    set_settings(settings)
     return jsonify({"enabled": True})
 
 @app.route('/startup/disable', methods=['POST'])
@@ -310,6 +322,9 @@ def startup_disable():
                 pass
     except FileNotFoundError:
         pass
+    settings = get_settings()
+    settings["startup_enabled"] = False
+    set_settings(settings)
     return jsonify({"enabled": False})
 
 @app.route('/settings/update', methods=['POST'])
@@ -322,15 +337,18 @@ def settings_update():
     idx = slider - 1
     deadband = int(input_data.get("deadband", settings["deadband"][idx]))
     min_interval_ms = int(input_data.get("min_interval_ms", settings["min_interval_ms"][idx]))
+    smoothing = input_data.get("smoothing", settings["smoothing"][idx])
+    smoothing = bool(int(smoothing)) if isinstance(smoothing, (int, str)) else bool(smoothing)
     settings["deadband"][idx] = max(0, deadband)
     settings["min_interval_ms"][idx] = max(0, min_interval_ms)
+    settings["smoothing"][idx] = smoothing
     set_settings(settings)
     return jsonify(settings)
 
 @app.route('/settings/toggle_safe', methods=['POST'])
 def settings_toggle_safe():
     settings = get_settings()
-    settings["safe_mode"] = not bool(settings.get("safe_mode", True))
+    settings["safe_mode"] = True
     set_settings(settings)
     return jsonify(settings)
 
