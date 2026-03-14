@@ -12,9 +12,33 @@ permissions:
 jobs:
   build-windows:
     runs-on: [self-hosted, windows]
+    env:
+      PIP_CACHE_DIR: ${{ runner.temp }}\pip-cache
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.PIP_CACHE_DIR }}
+          key: pip-${{ runner.os }}-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            pip-${{ runner.os }}-
+
+      - name: Cache Inno Setup
+        uses: actions/cache@v4
+        with:
+          path: C:\Program Files (x86)\Inno Setup 6
+          key: innosetup-${{ runner.os }}
+
+      - name: Cache build output
+        uses: actions/cache@v4
+        with:
+          path: |
+            build
+            output
+          key: build-${{ github.sha }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
