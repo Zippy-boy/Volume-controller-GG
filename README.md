@@ -7,7 +7,8 @@ Simple hardware knobs + SteelSeries GG Sonar mixer. The PC server reads the Ardu
 - `pc/server.py` � tray server (reads serial, drives Sonar, shows status)
 - `web/app.py` + `web/templates/index.html` � UI (mapping + tuning)
 
-## Install from releases. 
+## Install from releases
+https://github.com/Zippy-boy/Volume-controller-GG/releases
 
 ## Run locally
 1. Install Python 3.11
@@ -16,7 +17,7 @@ Simple hardware knobs + SteelSeries GG Sonar mixer. The PC server reads the Ardu
 4. `python web/app.py`
 
 ## Build installer (Windows)
-1. `powershell -ExecutionPolicy Bypass -File .\build.ps1`
+1. `powershell -ExecutionPolicy Bypass -Feile .\build.ps1`
 2. Open `installer.iss` in Inno Setup and build
 
 ## Notes
