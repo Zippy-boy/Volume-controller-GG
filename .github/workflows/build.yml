@@ -2,15 +2,92 @@ name: Build Windows Release
 
 on:
   push:
+    branches:
+      - main
     tags:
       - "v*"
   workflow_dispatch:
+  pull_request_review:
+    types: [submitted]
 
 permissions:
   contents: write
 
 jobs:
+  build-main-selfhosted:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, windows]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Build EXEs
+        run: powershell -ExecutionPolicy Bypass -File .\build.ps1
+
+      - name: Install Inno Setup
+        run: choco install innosetup -y
+
+      - name: Build installer
+        run: '& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "installer.iss"'
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: gg-hardware-mixer-windows-main
+          path: |
+            dist/GGHardwareServer.exe
+            dist/GGHardwareWeb.exe
+            dist/GGHardwareMixer-Setup.exe
+
+  build-pr-approved:
+    if: >
+      github.event_name == 'pull_request_review' &&
+      github.event.review.state == 'approved' &&
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, windows]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Build EXEs
+        run: powershell -ExecutionPolicy Bypass -File .\build.ps1
+
+      - name: Install Inno Setup
+        run: choco install innosetup -y
+
+      - name: Build installer
+        run: '& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "installer.iss"'
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: gg-hardware-mixer-windows-pr
+          path: |
+            dist/GGHardwareServer.exe
+            dist/GGHardwareWeb.exe
+            dist/GGHardwareMixer-Setup.exe
+
   build-windows:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
     runs-on: windows-latest
     steps:
       - name: Checkout

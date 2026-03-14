@@ -1,4 +1,5 @@
 dist
 build
 .pytest_cache
+scripts/local-tag.ps1
 *.exe
