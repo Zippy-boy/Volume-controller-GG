@@ -24,9 +24,8 @@ Source: "dist\{#AppExeServer}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "dist\{#AppExeWeb}"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExeServer}"
-Name: "{autoprograms}\{#AppName} UI"; Filename: "{app}\{#AppExeWeb}"
-Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeServer}"; Tasks: desktopicon
+Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExeServer}"; Parameters: "--ui"
+Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeServer}"; Parameters: "--ui"; Tasks: desktopicon
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop icon"; GroupDescription: "Additional icons:"; Flags: unchecked

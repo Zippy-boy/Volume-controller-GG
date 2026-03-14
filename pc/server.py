@@ -93,9 +93,7 @@ def ensure_data_files():
         VALUES_FILE.write_text(json.dumps({"values": [0, 0, 0, 0, 0], "ts": 0}))
 
 MUTEX_NAME = "GGHardwareMixerServer"
-mutex = ctypes.windll.kernel32.CreateMutexW(None, False, MUTEX_NAME)
-if ctypes.windll.kernel32.GetLastError() == 183:
-    sys.exit(0)
+OPEN_UI_FLAG = any(arg in ("--ui", "--open-ui") for arg in sys.argv[1:])
 
 
 def ensure_sonar():
@@ -300,15 +298,29 @@ def ensure_startup_registered():
 
 
 def open_app(icon, item):
+    def _log(msg):
+        try:
+            (DATA_DIR / "server.log").write_text(msg)
+        except Exception:
+            pass
     if getattr(sys, "frozen", False):
         web_exe = Path(sys.executable).with_name("GGHardwareWeb.exe")
-        subprocess.Popen([str(web_exe)], cwd=str(web_exe.parent))
+        if not web_exe.exists():
+            _log(f"UI exe missing: {web_exe}")
+            return
+        try:
+            subprocess.Popen([str(web_exe)], cwd=str(web_exe.parent))
+        except Exception as e:
+            _log(f"Failed to launch UI exe: {e}")
         return
     python_path = sys.executable
     pythonw_path = python_path.replace("python.exe", "pythonw.exe")
     if os.path.exists(pythonw_path):
         python_path = pythonw_path
-    subprocess.Popen([python_path, str(Path(__file__).resolve().parents[1] / "web" / "app.py")], cwd=str(Path(__file__).resolve().parents[1] / "web"))
+    try:
+        subprocess.Popen([python_path, str(Path(__file__).resolve().parents[1] / "web" / "app.py")], cwd=str(Path(__file__).resolve().parents[1] / "web"))
+    except Exception as e:
+        _log(f"Failed to launch UI script: {e}")
 
 
 def quit_action(icon, item):
@@ -494,6 +506,15 @@ def icon_status_loop(icon, base_img):
         time.sleep(ICON_UPDATE_INTERVAL)
 
 
+mutex = ctypes.windll.kernel32.CreateMutexW(None, False, MUTEX_NAME)
+if ctypes.windll.kernel32.GetLastError() == 183:
+    if OPEN_UI_FLAG:
+        try:
+            open_app(None, None)
+        except Exception:
+            pass
+    sys.exit(0)
+
 ensure_data_files()
 event = Event()
 base_image = Image.open(ICON_PATH)
@@ -507,5 +528,11 @@ icon.on_click = open_app
 
 threading.Thread(target=read_serial_data, args=(event,), daemon=True).start()
 threading.Thread(target=icon_status_loop, args=(icon, base_image), daemon=True).start()
+
+if OPEN_UI_FLAG:
+    try:
+        open_app(None, None)
+    except Exception:
+        pass
 
 icon.run()
