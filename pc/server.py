@@ -36,6 +36,23 @@ MAP_FILE = DATA_DIR / "sliders.json"
 SETTINGS_FILE = DATA_DIR / "settings.json"
 VALUES_FILE = DATA_DIR / "values.json"
 ICON_PATH = ASSET_DIR / "static" / "icon.png"
+DEFAULT_SLIDER_MAP = [
+    {"slider": 1, "channel": "master"},
+    {"slider": 2, "channel": "game"},
+    {"slider": 3, "channel": "chatRender"},
+    {"slider": 4, "channel": "media"},
+    {"slider": 5, "channel": "aux"},
+]
+DEFAULT_SETTINGS = {
+    "invert": False,
+    "deadband": [2, 2, 2, 2, 2],
+    "min_interval_ms": [30, 30, 30, 30, 30],
+    "smoothing": [False, False, False, False, False],
+    "com_port": "",
+    "safe_mode": True,
+    "startup_enabled": False,
+}
+DEFAULT_VALUES = {"values": [0, 0, 0, 0, 0], "ts": 0}
 
 CHANNELS = ["master", "game", "chatRender", "media", "aux"]
 CHANNEL_LABELS = {
@@ -70,27 +87,57 @@ STARTUP_CHECK_INTERVAL = 60.0
 SMOOTHING_ALPHA = 0.25
 last_startup_check = 0.0
 
+def write_json_atomic(path, data):
+    tmp_path = path.with_suffix(path.suffix + ".tmp")
+    with open(tmp_path, "w", encoding="utf-8") as file:
+        json.dump(data, file)
+    os.replace(tmp_path, path)
+
+
+def normalize_slider_map(data):
+    normalized = []
+    items = data if isinstance(data, list) else []
+    for index in range(5):
+        item = items[index] if index < len(items) and isinstance(items[index], dict) else {}
+        channel = item.get("channel", CHANNELS[index])
+        if channel not in CHANNELS:
+            channel = CHANNELS[index]
+        normalized.append({"slider": index + 1, "channel": channel})
+    return normalized
+
+
+def normalize_settings(data):
+    settings = dict(data or {})
+    settings.setdefault("invert", False)
+    settings.setdefault("com_port", "")
+    settings.setdefault("safe_mode", True)
+    settings.setdefault("deadband", [2, 2, 2, 2, 2])
+    settings.setdefault("min_interval_ms", [30, 30, 30, 30, 30])
+    settings.setdefault("smoothing", [False, False, False, False, False])
+    settings.setdefault("startup_enabled", False)
+    if len(settings.get("deadband", [])) < 5:
+        settings["deadband"] += [2] * (5 - len(settings["deadband"]))
+    if len(settings.get("min_interval_ms", [])) < 5:
+        settings["min_interval_ms"] += [30] * (5 - len(settings["min_interval_ms"]))
+    if len(settings.get("smoothing", [])) < 5:
+        settings["smoothing"] += [False] * (5 - len(settings["smoothing"]))
+    settings["deadband"] = [max(0, int(v)) for v in settings["deadband"][:5]]
+    settings["min_interval_ms"] = [max(0, int(v)) for v in settings["min_interval_ms"][:5]]
+    settings["smoothing"] = [bool(v) for v in settings["smoothing"][:5]]
+    settings["invert"] = bool(settings["invert"])
+    settings["safe_mode"] = bool(settings["safe_mode"])
+    settings["startup_enabled"] = bool(settings["startup_enabled"])
+    settings["com_port"] = str(settings["com_port"] or "")
+    return settings
+
+
 def ensure_data_files():
     if not MAP_FILE.exists():
-        MAP_FILE.write_text(json.dumps([
-            {"slider": 1, "channel": "master"},
-            {"slider": 2, "channel": "game"},
-            {"slider": 3, "channel": "chatRender"},
-            {"slider": 4, "channel": "media"},
-            {"slider": 5, "channel": "aux"},
-        ]))
+        write_json_atomic(MAP_FILE, DEFAULT_SLIDER_MAP)
     if not SETTINGS_FILE.exists():
-        SETTINGS_FILE.write_text(json.dumps({
-            "invert": False,
-            "deadband": [2, 2, 2, 2, 2],
-            "min_interval_ms": [30, 30, 30, 30, 30],
-            "smoothing": [False, False, False, False, False],
-            "com_port": "",
-            "safe_mode": True,
-            "startup_enabled": False
-        }))
+        write_json_atomic(SETTINGS_FILE, DEFAULT_SETTINGS)
     if not VALUES_FILE.exists():
-        VALUES_FILE.write_text(json.dumps({"values": [0, 0, 0, 0, 0], "ts": 0}))
+        write_json_atomic(VALUES_FILE, DEFAULT_VALUES)
 
 MUTEX_NAME = "GGHardwareMixerServer"
 OPEN_UI_FLAG = any(arg in ("--ui", "--open-ui") for arg in sys.argv[1:])
@@ -115,7 +162,7 @@ def ensure_sonar():
 
 
 def change_volume(channel, percentage):
-    percentage = asd(int(percentage), 0, 100, 0, 1)
+    percentage = asd(max(0, min(100, int(percentage))), 0, 100, 0, 1)
     if ensure_sonar():
         if sonar.streamer_mode:
             sonar.set_volume(channel, float(percentage), streamer_slider="monitoring")
@@ -173,8 +220,12 @@ def load_slider_map(force=False):
     except FileNotFoundError:
         return
     if force or map_mtime != mtime:
-        with open(MAP_FILE, "r") as file:
-            slider_map = json.load(file)
+        try:
+            with open(MAP_FILE, "r", encoding="utf-8") as file:
+                slider_map = normalize_slider_map(json.load(file))
+        except (json.JSONDecodeError, TypeError):
+            slider_map = normalize_slider_map(DEFAULT_SLIDER_MAP)
+            write_json_atomic(MAP_FILE, slider_map)
         map_mtime = mtime
 
 
@@ -189,21 +240,12 @@ def load_settings(force=False):
     except FileNotFoundError:
         return
     if force or settings_mtime != mtime:
-        with open(SETTINGS_FILE, "r") as file:
-            settings_data = json.load(file)
-        settings_data.setdefault("invert", False)
-        settings_data.setdefault("com_port", "")
-        settings_data["safe_mode"] = True
-        settings_data.setdefault("deadband", [2, 2, 2, 2, 2])
-        settings_data.setdefault("min_interval_ms", [30, 30, 30, 30, 30])
-        settings_data.setdefault("smoothing", [False, False, False, False, False])
-        settings_data.setdefault("startup_enabled", False)
-        if len(settings_data.get("deadband", [])) < 5:
-            settings_data["deadband"] += [2] * (5 - len(settings_data["deadband"]))
-        if len(settings_data.get("min_interval_ms", [])) < 5:
-            settings_data["min_interval_ms"] += [30] * (5 - len(settings_data["min_interval_ms"]))
-        if len(settings_data.get("smoothing", [])) < 5:
-            settings_data["smoothing"] += [False] * (5 - len(settings_data["smoothing"]))
+        try:
+            with open(SETTINGS_FILE, "r", encoding="utf-8") as file:
+                settings_data = normalize_settings(json.load(file))
+        except (json.JSONDecodeError, TypeError):
+            settings_data = normalize_settings(DEFAULT_SETTINGS)
+            write_json_atomic(SETTINGS_FILE, settings_data)
         settings_mtime = mtime
 
 
@@ -468,10 +510,7 @@ def read_serial_data(event: Event):
         vals_list = [nob1, nob2, nob3, nob4, nob5]
         if last_written_vals != vals_list and (now - last_write) >= VALUES_WRITE_INTERVAL:
             try:
-                tmp_path = str(VALUES_FILE) + ".tmp"
-                with open(tmp_path, "w") as f:
-                    json.dump({"values": vals_list, "ts": time.time()}, f)
-                os.replace(tmp_path, VALUES_FILE)
+                write_json_atomic(VALUES_FILE, {"values": vals_list, "ts": time.time()})
                 last_write = now
                 last_written_vals = vals_list
             except Exception:

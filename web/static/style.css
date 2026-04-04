@@ -71,6 +71,10 @@ body {
     background: linear-gradient(180deg, #d9ffe6 0%, #9debb8 100%);
 }
 
+.safeOn {
+    background: linear-gradient(180deg, #fff3d8 0%, #f4c974 100%);
+}
+
 .startupEnabled {
     background: linear-gradient(180deg, #d9ffe6 0%, #9debb8 100%);
 }
@@ -234,6 +238,15 @@ body {
     padding: 4px 6px;
     text-align: center;
     background: linear-gradient(180deg, #ffffff 0%, #e1e4ff 100%);
+}
+
+.invertBtn:hover,
+.startupBtn:hover,
+.safeBtn:hover,
+.tuneBtn:hover,
+.smoothBtn:hover {
+    transform: translateY(-1px);
+    transition: transform 120ms ease;
 }
 
 .monitorPanel {

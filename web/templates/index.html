@@ -16,6 +16,9 @@
         <div class="panelHeader">
             <div class="title">GG Hardware Mixer</div>
             <div class="headerActions">
+                <button class="safeBtn {% if settings and settings['safe_mode'] %}safeOn{% endif %}" onclick="toggleSafeMode()" id="safe-btn">
+                    Safe Mode: {% if settings and settings['safe_mode'] %}On{% else %}Off{% endif %}
+                </button>
                 <button class="invertBtn" onclick="toggleInvert()" id="invert-btn">
                     Invert: {% if settings and settings['invert'] %}On{% else %}Off{% endif %}
                 </button>
@@ -101,17 +104,26 @@
 
         const dragging = {};
         let startupEnabled = false;
+        let safeModeEnabled = {{ 'true' if settings and settings['safe_mode'] else 'false' }};
+        let invertEnabled = {{ 'true' if settings and settings['invert'] else 'false' }};
         let lastTs = 0;
         const lastUiValues = [null, null, null, null, null];
         let pollTimer = null;
         let sonarTimer = null;
         let pollValuesInterval = 600;
         let pollSonarInterval = 7000;
+        let selectedComPort = "{{ settings.get('com_port', '') }}";
+
+        function formatDisplayedValue(rawValue) {
+            const value = Number(rawValue);
+            if (Number.isNaN(value)) return 0;
+            return invertEnabled ? 100 - value : value;
+        }
 
         function changeVolume(volume, slider) {
             volume = asd(volume, 100, 0, 0, 1);
             const valueTag = document.getElementById('value-' + slider);
-            if (valueTag) valueTag.textContent = Math.round(volume * 100);
+            if (valueTag) valueTag.textContent = formatDisplayedValue(Number(document.getElementById('slider-' + slider).value));
             fetch('/change_volume', {
                 method: 'POST',
                 headers: {
@@ -202,7 +214,7 @@
                             el.value = val;
                             updateSliderFill(slider);
                         }
-                        if (tag) tag.textContent = val;
+                        if (tag) tag.textContent = formatDisplayedValue(val);
                         lastUiValues[idx] = val;
                     });
                 })
@@ -275,9 +287,35 @@
             })
             .then(response => response.json())
             .then(data => {
+                invertEnabled = !!data.invert;
                 var btn = document.getElementById('invert-btn');
                 if (btn) {
                     btn.textContent = 'Invert: ' + (data.invert ? 'On' : 'Off');
+                }
+                document.querySelectorAll('.volumeSlider').forEach((el, idx) => {
+                    const tag = document.getElementById('value-' + (idx + 1));
+                    if (tag) tag.textContent = formatDisplayedValue(el.value);
+                });
+            })
+            .catch((error) => {
+                console.error('Error:', error);
+            });
+        }
+
+        function toggleSafeMode() {
+            fetch('/settings/toggle_safe', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                safeModeEnabled = !!data.safe_mode;
+                const btn = document.getElementById('safe-btn');
+                if (btn) {
+                    btn.textContent = 'Safe Mode: ' + (safeModeEnabled ? 'On' : 'Off');
+                    btn.classList.toggle('safeOn', safeModeEnabled);
                 }
             })
             .catch((error) => {
@@ -291,26 +329,33 @@
                 .then(data => {
                     const sel = document.getElementById('com-select');
                     if (!sel) return;
-                    const current = "{{settings.get('com_port','')}}";
                     sel.innerHTML = '<option value="">Auto</option>';
                     (data.ports || []).forEach(p => {
                         const opt = document.createElement('option');
                         opt.value = p.device;
                         opt.textContent = p.device + ' - ' + p.description;
-                        if (p.device === current) opt.selected = true;
+                        if (p.device === selectedComPort) opt.selected = true;
                         sel.appendChild(opt);
                     });
+                    sel.value = selectedComPort;
                 })
                 .catch(() => {});
         }
 
         function setComPort(port) {
+            selectedComPort = port;
             fetch('/serial/select', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({ com_port: port })
+            })
+            .then(response => response.json())
+            .then(data => {
+                selectedComPort = data.com_port || '';
+                const sel = document.getElementById('com-select');
+                if (sel) sel.value = selectedComPort;
             }).catch((error) => {
                 console.error('Error:', error);
             });
